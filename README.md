@@ -2,29 +2,39 @@
 
 [中文](./README.md) | [English](./README.en.md)
 
-一个用于修复 Codex 本地历史记录可见性的 Codex skill。它面向“切换 model provider 后旧对话看不见”的场景，帮助 Codex 检查、迁移和回滚本地历史中的 provider 标记。
+**切换 provider 后，让 Codex 历史会话重新可见。**
 
-这个仓库的主要使用方式是安装为 **Codex skill**，然后让 Codex 按 skill 工作流执行检查或迁移。仓库内的 PowerShell 脚本是 skill 的确定性执行工具，通常不需要用户直接手动运行。
+Codex History Provider 是一个用于修复 Codex 本地历史会话可见性的 **Codex skill**。它面向 Codex Desktop、`/resume` 或 provider 切换后旧会话不可见的场景，帮助 Codex 检查并同步本地会话 metadata 中的 `model_provider` 标记。
+
+关键词：Codex Desktop、Codex skill、历史会话、会话可见性、provider 切换、`model_provider`、rollout JSONL、SQLite、`state_5.sqlite`。
 
 ## 解决什么问题
 
-Codex 桌面端的本地历史通常由两层组成：
+切换 model provider、使用自定义 provider、代理 provider 或 provider 切换工具后，旧会话可能仍然完整保存在本地，但不再出现在 Codex 的历史列表、项目会话列表或 `/resume` 结果里。
 
-- `state_5.sqlite`：保存会话索引、标题、归档状态、provider 分组等 UI 状态。
-- `sessions/` 和 `archived_sessions/`：保存每个会话的 rollout JSONL。
+这通常不是会话文件丢失，而是这些位置的 provider metadata 不一致：
 
-当你切换 provider、使用自定义 provider、代理 provider 或相关切换工具时，旧对话可能仍然完整保存在本地，但因为 `model_provider` 标记仍属于旧 provider 分组，当前 Codex UI 不再显示它们。
+- `state_5.sqlite` 中的 SQLite 线程表，用于保存会话索引、标题、归档状态、provider 分组等 UI 状态。
+- `sessions/` 和 `archived_sessions/` 中的 rollout JSONL 文件，用于保存每个历史会话的事件流和 session metadata。
 
-这个 skill 会让 Codex 同时检查 SQLite 和 JSONL 中的 provider 标记，并在迁移前创建备份，避免只改一边造成状态不一致。
+这个 skill 会让 Codex 同时检查 SQLite 和 rollout JSONL 中的 provider 标记，并在迁移前创建备份，避免只修复一边导致会话 metadata 不一致。
+
+## 适用场景
+
+- 切换 provider 后，旧会话在 Codex Desktop 中不可见。
+- `/resume` 或历史列表看不到原本存在的会话。
+- 想把某个 provider 分组下的历史会话移动到目标 provider。
+- 想先诊断本地会话 metadata 分布，再决定是否迁移。
+- 想保留可回滚备份，而不是手动直接修改 SQLite 或 JSONL。
 
 ## 功能
 
-- 检查当前 Codex 本地历史的 provider 分布。
-- 将本地历史迁移到指定目标 provider。
-- 只迁移某个来源 provider 到目标 provider。
-- 在迁移前创建备份，并支持从备份回滚。
-- 识别 Codex App 打开时可能出现的 JSONL 文件锁定。
-- 不修改 API key、认证信息、provider 模板或第三方切换工具配置。
+- 检查当前 Codex 本地历史会话的 provider 分布。
+- 将本地历史会话 metadata 迁移到指定目标 provider。
+- 只迁移某个来源 provider 下的历史会话。
+- 迁移前创建备份，并支持从备份回滚。
+- 识别 Codex App 打开时可能出现的 rollout JSONL 文件锁定。
+- 不修改 API key、登录状态、认证文件、provider 模板或第三方切换工具配置。
 
 ## 安装为 Skill
 
@@ -41,15 +51,15 @@ git clone https://github.com/FanLingtian/codex-history-provider "$env:USERPROFIL
 在 Codex 中直接提出类似请求即可：
 
 ```text
-使用 $codex-history-provider 检查我的本地 Codex 历史 provider 状态。
+使用 $codex-history-provider 检查我的本地 Codex 历史会话 provider 状态。
 ```
 
 ```text
-使用 $codex-history-provider 将我的本地 Codex 历史迁移到 <target-provider>。
+使用 $codex-history-provider 将我的本地 Codex 历史会话迁移到 <target-provider>。
 ```
 
 ```text
-使用 $codex-history-provider 只把 <source-provider> 下的历史迁移到 <target-provider>。
+使用 $codex-history-provider 只把 <source-provider> 下的历史会话迁移到 <target-provider>。
 ```
 
 ```text
@@ -57,6 +67,16 @@ git clone https://github.com/FanLingtian/codex-history-provider "$env:USERPROFIL
 ```
 
 `<target-provider>` 和 `<source-provider>` 都必须使用你的 Codex 配置里真实的 provider id，且大小写敏感。
+
+## 能力边界
+
+这个 skill 只修复本地历史会话可见性相关的 provider metadata：
+
+- 不修改会话正文、消息内容、标题或历史排序。
+- 不修改 `auth.json`、API key、登录状态或 provider 凭据。
+- 不修改第三方 provider 切换工具的配置或模板。
+- 不尝试重新加密旧会话里的加密内容。
+- 如果旧会话本身含有和账号/provider 绑定的加密内容，迁移后通常只能恢复列表可见性，继续对话仍可能受上游加密机制限制。
 
 ## 依赖
 
@@ -70,17 +90,19 @@ git clone https://github.com/FanLingtian/codex-history-provider "$env:USERPROFIL
 sqlite3 --version
 ```
 
-## 安全机制
+## 安全与回滚
 
-- 每次迁移前都会创建备份目录：
+每次迁移前都会创建备份目录：
 
 ```text
 <CodexHome>\history-provider-backups\YYYYMMDD-HHMMSS
 ```
 
-- 备份包含 SQLite 状态库、变更过的 JSONL 文件、会话索引、桌面端全局状态和 `manifest.json`。
-- 如果 JSONL 文件被 Codex App 锁定，skill 会避免只迁移 SQLite 或只迁移 JSONL，尽量保持单个会话的两层元数据一致。
-- 回滚时以备份目录中的 `manifest.json` 为准，只恢复该次迁移实际修改过的文件。
+备份包含 SQLite 状态库、变更过的 rollout JSONL 文件、会话索引、桌面端全局状态和 `manifest.json`。
+
+处理锁定文件时，skill 会尽量保持单个会话在 SQLite 和 JSONL 两层 metadata 中的一致性。如果某个 rollout JSONL 被 Codex App 锁定，脚本会跳过或排除对应 SQLite 行，并提示完全退出 Codex App 后重试。
+
+回滚时以备份目录中的 `manifest.json` 为准，只恢复该次迁移实际修改过的文件。
 
 ## 高级：脚本入口
 

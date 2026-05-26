@@ -2,29 +2,39 @@
 
 [中文](./README.md) | [English](./README.en.md)
 
-A Codex skill for repairing local Codex conversation history visibility. It is designed for cases where older conversations become hidden after switching model providers, and helps Codex inspect, migrate, and roll back local history provider markers.
+**Make Codex history sessions visible again after switching providers.**
 
-This repository is meant to be used primarily as a **Codex skill**. The bundled PowerShell script is the deterministic execution tool used by the skill; most users should ask Codex to use the skill instead of running the script directly.
+Codex History Provider is a **Codex skill** for repairing local Codex history session visibility. It is designed for cases where older sessions disappear from Codex Desktop, project history, or `/resume` after provider switching, and helps Codex inspect and synchronize local `model_provider` metadata.
+
+Keywords: Codex Desktop, Codex skill, history sessions, session visibility, provider switching, `model_provider`, rollout JSONL, SQLite, `state_5.sqlite`.
 
 ## Problem
 
-Codex Desktop local history is usually stored in two layers:
+After switching model providers, using custom providers, proxy providers, or provider-switching tools, older sessions may still exist on disk but no longer appear in Codex history, project session lists, or `/resume` results.
 
-- `state_5.sqlite`: conversation index, titles, archive state, provider buckets, and other UI state.
-- `sessions/` and `archived_sessions/`: rollout JSONL files for individual sessions.
+The sessions are often not lost. The usual cause is inconsistent provider metadata across local history surfaces:
 
-When switching providers, using custom providers, proxy providers, or provider-switching tools, older conversations may still exist on disk but become hidden because their `model_provider` marker remains under a previous provider bucket.
+- The SQLite threads table in `state_5.sqlite`, which stores the session index, titles, archive state, provider buckets, and other UI state.
+- Rollout JSONL files under `sessions/` and `archived_sessions/`, which store each history session's event stream and session metadata.
 
-This skill helps Codex inspect both SQLite and JSONL provider markers and creates a backup before migration, so it does not repair only one side of the local history metadata.
+This skill helps Codex inspect both SQLite and rollout JSONL provider markers and creates a backup before migration, so it does not repair only one side of the session metadata.
+
+## When To Use
+
+- Older sessions are hidden in Codex Desktop after provider switching.
+- `/resume` or the history list does not show sessions that still exist locally.
+- You want to move history sessions from one provider bucket to a target provider.
+- You want to diagnose local session metadata distribution before migrating.
+- You want rollback backups instead of manually editing SQLite or JSONL files.
 
 ## Features
 
-- Inspect current local Codex history provider distribution.
-- Migrate local history markers to a target provider.
-- Migrate only one source provider to a target provider.
+- Inspect current provider distribution for local Codex history sessions.
+- Migrate local history session metadata to a target provider.
+- Migrate only sessions under one source provider.
 - Create migration backups and support rollback.
-- Detect locked JSONL files while Codex App is open.
-- Avoid modifying API keys, auth files, provider templates, or third-party provider-switching configuration.
+- Detect locked rollout JSONL files while Codex App is open.
+- Avoid modifying API keys, login state, auth files, provider templates, or third-party provider-switching configuration.
 
 ## Install As A Skill
 
@@ -41,15 +51,15 @@ If a directory with the same name already exists, back it up or remove it first.
 Ask Codex directly, for example:
 
 ```text
-Use $codex-history-provider to inspect my local Codex history provider state.
+Use $codex-history-provider to inspect my local Codex history session provider state.
 ```
 
 ```text
-Use $codex-history-provider to migrate my local Codex history to <target-provider>.
+Use $codex-history-provider to migrate my local Codex history sessions to <target-provider>.
 ```
 
 ```text
-Use $codex-history-provider to migrate only <source-provider> history to <target-provider>.
+Use $codex-history-provider to migrate only <source-provider> history sessions to <target-provider>.
 ```
 
 ```text
@@ -57,6 +67,16 @@ Use $codex-history-provider to roll back from backup <backup-dir>.
 ```
 
 `<target-provider>` and `<source-provider>` must be real provider ids from your Codex configuration. Provider ids are case-sensitive.
+
+## Boundaries
+
+This skill only repairs provider metadata related to local history session visibility:
+
+- It does not modify message content, session titles, or history ordering.
+- It does not modify `auth.json`, API keys, login state, or provider credentials.
+- It does not modify configuration or templates from third-party provider-switching tools.
+- It does not attempt to re-encrypt encrypted content from older sessions.
+- If an older session contains encrypted content tied to a specific account or provider, migration may restore list visibility while continuing or compacting that session can still be limited by upstream encryption behavior.
 
 ## Requirements
 
@@ -70,17 +90,19 @@ Check the SQLite dependency:
 sqlite3 --version
 ```
 
-## Safety Model
+## Safety And Rollback
 
-- Every migration creates a backup directory:
+Every migration creates a backup directory:
 
 ```text
 <CodexHome>\history-provider-backups\YYYYMMDD-HHMMSS
 ```
 
-- Backups include the SQLite state database, changed JSONL files, session index, desktop global state, and `manifest.json`.
-- If JSONL files are locked while Codex App is open, the skill avoids migrating only SQLite or only JSONL and keeps each conversation's two metadata layers consistent where possible.
-- Rollback uses the backup `manifest.json` as the source of truth and restores only files changed by that migration.
+Backups include the SQLite state database, changed rollout JSONL files, session index, desktop global state, and `manifest.json`.
+
+When files are locked, the skill tries to keep each session consistent across both SQLite and JSONL metadata layers. If a rollout JSONL file is locked by Codex App, the script skips or excludes the matching SQLite row and tells you to fully quit Codex App before retrying.
+
+Rollback uses the backup `manifest.json` as the source of truth and restores only files changed by that migration.
 
 ## Advanced: Script Entrypoint
 
