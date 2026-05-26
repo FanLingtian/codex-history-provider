@@ -1,0 +1,4 @@
+interface:
+  display_name: "Codex History Provider"
+  short_description: "Migrate Codex history providers safely."
+  default_prompt: "Inspect my Codex local history provider markers and help migrate or roll them back safely."

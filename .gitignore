@@ -1,0 +1,35 @@
+# Local Codex runtime data
+state_5.sqlite
+*.sqlite
+*.sqlite3
+sessions/
+archived_sessions/
+history-provider-backups/
+session_index.jsonl
+.codex-global-state.json
+config.toml
+auth.json
+
+# Credentials and environment
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Logs and temporary files
+*.log
+*.tmp
+*.bak
+*.old
+*.swp
+Thumbs.db
+.DS_Store
+
+# Tooling caches
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.cache/
